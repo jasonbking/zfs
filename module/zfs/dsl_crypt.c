@@ -1436,6 +1436,7 @@ spa_keystore_change_key_sync_impl(uint64_t rddobj, uint64_t ddobj,
 	dsl_dir_t *dd = NULL;
 	dsl_crypto_key_t *dck = NULL;
 	uint64_t curr_rddobj;
+	int ret;
 
 	ASSERT(RW_WRITE_HELD(&dp->dp_spa->spa_keystore.sk_wkeys_lock));
 
@@ -1450,9 +1451,16 @@ spa_keystore_change_key_sync_impl(uint64_t rddobj, uint64_t ddobj,
 
 	/*
 	 * Stop recursing if this dsl dir didn't inherit from the root
-	 * or if this dd is a clone.
+	 * or if this dd is a clone, or this is an unencrypted child.
 	 */
-	VERIFY0(dsl_dir_get_encryption_root_ddobj(dd, &curr_rddobj));
+	ret = dsl_dir_get_encryption_root_ddobj(dd, &curr_rddobj);
+	if (ret == ENOENT) {
+		/* Unencrypted child */
+		dsl_dir_rele(dd, FTAG);
+		return;
+	}
+	VERIFY0(ret);
+
 	if (!skip && (curr_rddobj != rddobj || dsl_dir_is_clone(dd))) {
 		dsl_dir_rele(dd, FTAG);
 		return;
